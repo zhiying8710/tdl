@@ -165,3 +165,58 @@ export { TDLibError, UnknownError }
 
 // TODO: We could possibly export an unsafe/unstable getRawTdjson() : Tdjson
 // function that allows to access underlying tdjson functions
+
+
+// EXPORT MULTI ACCOUNT METHODS
+
+export function getAddon(lib_file: string, verbosityLevel: number | string = 1) {
+  debug('Initializing the node addon')
+  const addon = loadAddon(lib_file, true)
+  if (verbosityLevel !== 'default') {
+    debug('Executing setLogVerbosityLevel', verbosityLevel)
+    const request = JSON.stringify({
+      '@type': 'setLogVerbosityLevel',
+      new_verbosity_level: cfg.verbosityLevel
+    })
+    const response = addon.tdnew.execute(request)
+    debug('setLogVerbosityLevel response:', response)
+  }
+  return addon
+}
+
+export function createClientWithAddon (opts: ClientOptions, addon: Tdjson, receiveTimeout: number = 10): Client {
+  const managingOpts = {
+    bare: false,
+    receiveTimeout,
+    executeFunc(request: any): any {
+      debug('execute', request)
+      request = JSON.stringify(deepRenameKey('_', '@type', request))
+      const response = addon.tdnew.execute(request)
+      return deepRenameKey('@type', '_', JSON.parse(response))
+    },
+    useOldTdjsonInterface: false
+  }
+  addon.tdnew.init(receiveTimeout)
+  const client = new Client(addon, managingOpts, opts)
+  receiveClientLoop(client, addon)
+  return client
+}
+
+async function receiveClientLoop (client: Client, addon: Tdjson) {
+  debug('Starting tdn receive loop')
+  if (addon == null) throw new Error('TDLib is uninitialized')
+  try {
+    addon.tdnew.ref()
+    while (!client.isClosed()) {
+      const responseString = await addon.tdnew.receive()
+      if (responseString == null) {
+        debug('Receive loop: got empty response')
+        continue
+      }
+      const res = JSON.parse(responseString)
+      client.handleReceive(res)
+    }
+  } finally {
+    addon.tdnew.unref()
+  }
+}
