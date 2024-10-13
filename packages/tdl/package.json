@@ -48,5 +48,8 @@
   "bugs": {
     "url": "https://github.com/eilvelia/tdl/issues"
   },
-  "homepage": "https://github.com/eilvelia/tdl#readme"
+  "homepage": "https://github.com/eilvelia/tdl#readme",
+  "publishConfig": {
+    "access": "public"
+  }
 }
